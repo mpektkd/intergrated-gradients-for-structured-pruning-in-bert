@@ -1,0 +1,302 @@
+import os
+import numpy as np
+import fnmatch
+import re
+import torch
+from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer
+from dataclasses import dataclass, field
+from typing import Optional
+import warnings
+import textpruner
+from textpruner import summary, TransformerPruner
+
+warnings.filterwarnings("ignore")
+
+from variables import *
+
+@dataclass
+class DataTrainingArguments:
+    """
+    Arguments pertaining to what data we are going to input our model for training and eval.
+
+    Using `HfArgumentParser` we can turn this class
+    into argparse arguments to be able to specify them on
+    the command line.
+    """
+
+    task_name: Optional[str] = field(
+        default=None,
+        metadata={"help": "The name of the task to train on: " + ", ".join(task_to_keys.keys())},
+    )
+    dataset_name: Optional[str] = field(
+        default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
+    )
+    dataset_config_name: Optional[str] = field(
+        default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
+    )
+    max_seq_length: int = field(
+        default=128,
+        metadata={
+            "help": (
+                "The maximum total input sequence length after tokenization. Sequences longer "
+                "than this will be truncated, sequences shorter will be padded."
+            )
+        },
+    )
+    overwrite_cache: bool = field(
+        default=False, metadata={"help": "Overwrite the cached preprocessed datasets or not."}
+    )
+    pad_to_max_length: bool = field(
+        default=True,
+        metadata={
+            "help": (
+                "Whether to pad all samples to `max_seq_length`. "
+                "If False, will pad the samples dynamically when batching to the maximum length in the batch."
+            )
+        },
+    )
+    max_train_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "For debugging purposes or quicker training, truncate the number of training examples to this "
+                "value if set."
+            )
+        },
+    )
+    max_eval_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "For debugging purposes or quicker training, truncate the number of evaluation examples to this "
+                "value if set."
+            )
+        },
+    )
+    max_predict_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "For debugging purposes or quicker training, truncate the number of prediction examples to this "
+                "value if set."
+            )
+        },
+    )
+    train_file: Optional[str] = field(
+        default=None, metadata={"help": "A csv or a json file containing the training data."}
+    )
+    validation_file: Optional[str] = field(
+        default=None, metadata={"help": "A csv or a json file containing the validation data."}
+    )
+    test_file: Optional[str] = field(default=None, metadata={"help": "A csv or a json file containing the test data."})
+
+    def __post_init__(self):
+        if self.task_name is not None:
+            self.task_name = self.task_name.lower()
+            if self.task_name not in task_to_keys.keys():
+                raise ValueError("Unknown task, you should pick one in " + ",".join(task_to_keys.keys()))
+        elif self.dataset_name is not None:
+            pass
+        elif self.train_file is None or self.validation_file is None:
+            raise ValueError("Need either a GLUE task, a training/validation file or a dataset name.")
+        else:
+            train_extension = self.train_file.split(".")[-1]
+            assert train_extension in ["csv", "json"], "`train_file` should be a csv or a json file."
+            validation_extension = self.validation_file.split(".")[-1]
+            assert (
+                validation_extension == train_extension
+            ), "`validation_file` should have the same extension (csv or json) as `train_file`."
+
+
+@dataclass
+class ModelArguments:
+    """
+    Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
+    """
+
+    model_name_or_path: str = field(
+        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+    )
+    config_name: Optional[str] = field(
+        default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
+    )
+    tokenizer_name: Optional[str] = field(
+        default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+    )
+    cache_dir: Optional[str] = field(
+        default=None,
+        metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
+    )
+    use_fast_tokenizer: bool = field(
+        default=True,
+        metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
+    )
+    model_revision: str = field(
+        default="main",
+        metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
+    )
+    token: str = field(
+        default=None,
+        metadata={
+            "help": (
+                "The token to use as HTTP bearer authorization for remote files. If not specified, will use the token "
+                "generated when running `huggingface-cli login` (stored in `~/.huggingface`)."
+            )
+        },
+    )
+    use_auth_token: bool = field(
+        default=None,
+        metadata={
+            "help": "The `use_auth_token` argument is deprecated and will be removed in v4.34. Please use `token` instead."
+        },
+    )
+    trust_remote_code: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "Whether or not to allow for custom models defined on the Hub in their own modeling files. This option "
+                "should only be set to `True` for repositories you trust and in which you have read the code, as it will "
+                "execute code present on the Hub on your local machine."
+            )
+        },
+    )
+    ignore_mismatched_sizes: bool = field(
+        default=False,
+        metadata={"help": "Will enable to load a pretrained model whose head dimensions are different."},
+    )
+
+# Define paths
+base_path = MASK_APPLY_BASE_PATH
+base_path2 = MASK_APPLY_BASE_PATH2
+
+# Function to extract the numeric part from the filename
+def extract_number(file_name):
+    match = re.search(r'head_mask_(\d+).npy', file_name)
+    return int(match.group(1)) if match else -1
+
+# Function to check if the corresponding directory exists in the 2nd directory
+def directory_exists(base_path2, task, sample, file_name):
+    output_dir = os.path.join(base_path2, task, sample, file_name[:-4])
+    return os.path.exists(output_dir)
+
+# Function to load .npy files that match the pattern head_mask_{0-9*}.npy
+def load_npy_files(base_path, base_path2):
+    data = {}
+    
+    # Iterate through all tasks (e.g., mrpc, mnli, qqp, etc.) in sorted order
+    for task in sorted(os.listdir(base_path)):
+        task_path = os.path.join(base_path, task)
+        
+        # Ensure the task_path is a directory
+        if os.path.isdir(task_path):
+            data[task] = {}
+            
+            # Iterate through the samples (e.g., samples_2000) in sorted order
+            for sample in sorted(os.listdir(task_path)):
+                sample_path = os.path.join(task_path, sample)
+                
+                # Ensure the sample_path is a directory
+                if os.path.isdir(sample_path):
+                    data[task][sample] = {}
+                    
+                    # Get all files that match the pattern head_mask_[0-9]*.npy
+                    files = [f for f in os.listdir(sample_path) if fnmatch.fnmatch(f, 'head_mask_[0-9]*.npy')]
+                    
+                    # Sort files based on the numeric part of the filename
+                    files.sort(key=extract_number)
+                    
+                    # Load the sorted .npy files if the corresponding directory doesn't exist
+                    for file_name in files:
+                        if not directory_exists(base_path2, task, sample, file_name):
+                            file_path = os.path.join(sample_path, file_name)
+                            
+                            # Load the .npy file
+                            data[task][sample][file_name] = np.load(file_path)
+                            # print(f"Loaded {file_path}")
+    
+    return data
+
+# Load the npy files
+npy_data = load_npy_files(base_path, base_path2)
+
+# Model configuration
+model_name_or_path = MODEL_NAME
+_samples=SAMPLES
+
+# Function to create directories
+def create_directories(path):
+    if os.path.exists(path):
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                os.remove(os.path.join(root, file))
+        print(f"Deleted all files inside the directory: {path}")
+    else:
+        os.makedirs(path)
+        print(f"Created directories for path: {path}")
+
+# Process each task and mask
+for task in npy_data:
+    
+    if npy_data[task].get(f'balanced_samples_{_samples}') is None:
+        continue
+
+    for mask_key, mask_value in npy_data[task][f'balanced_samples_{_samples}'].items():
+        print(f"{task}, {mask_key}, {extract_number(mask_key)}")
+
+        model_args = ModelArguments(model_name_or_path=model_name_or_path)
+        data_args = DataTrainingArguments(task_name=task, max_seq_length=128)
+
+        config = AutoConfig.from_pretrained(
+            model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+            num_labels=3 if task != "mnli" else 2,
+            finetuning_task=data_args.task_name,
+            cache_dir=model_args.cache_dir,
+            token=model_args.token,
+            trust_remote_code=model_args.trust_remote_code,
+            output_attentions=True
+        )
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
+            cache_dir=model_args.cache_dir,
+            use_fast=model_args.use_fast_tokenizer,
+            token=model_args.token,
+            trust_remote_code=model_args.trust_remote_code,
+        )
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            cache_dir=model_args.cache_dir, 
+            attn_implementation="eager"
+        )
+
+        # print("Before pruning:")
+        # print(summary(model))
+
+        pruner = TransformerPruner(model)
+
+        head_mask = mask_value
+        head_mask = torch.from_numpy(head_mask)
+
+        ffn_mask = torch.ones((12, 3072))
+
+        pruner.prune(head_mask=head_mask, ffn_mask=ffn_mask)
+
+        # print("After pruning:")
+        # print(summary(model))
+
+        for i in range(12):
+            print ((model.base_model.encoder.layer[i].intermediate.dense.weight.shape,
+                    model.base_model.encoder.layer[i].intermediate.dense.bias.shape,
+                    model.base_model.encoder.layer[i].attention.self.key.weight.shape))
+
+        token = tokenizer("Hello, I am looking <mask> Jammie", return_tensors="pt")
+
+        inference = textpruner.inference_time(model, token)
+        print(inference)
+
+        output_dir = os.path.join(base_path2, task, f'balanced_samples_{_samples}', mask_key[:-4])
+        create_directories(output_dir)
+
+        model.save_pretrained(output_dir)
+        tokenizer.save_pretrained(output_dir)

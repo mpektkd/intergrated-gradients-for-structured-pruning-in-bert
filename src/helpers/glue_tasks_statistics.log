@@ -1,0 +1,32 @@
+2024-08-20 02:41:05,962 - INFO - Generating statistics for cola...
+2024-08-20 02:41:11,503 - INFO - Skewness for cola: 1.56
+2024-08-20 02:41:11,503 - INFO - For cola, keeping sentences with token length between 5.00 and 16.00
+2024-08-20 02:41:11,595 - INFO - Filtered dataset size: 874
+2024-08-20 02:41:11,877 - INFO - Generating statistics for mrpc...
+2024-08-20 02:41:16,042 - INFO - Skewness for mrpc: 0.15
+2024-08-20 02:41:16,042 - INFO - For mrpc, keeping sentences with token length between 38.47 and 65.08
+2024-08-20 02:41:16,182 - INFO - Filtered dataset size: 267
+2024-08-20 02:41:16,461 - INFO - Generating statistics for qnli...
+2024-08-20 02:41:22,131 - INFO - Skewness for qnli: 1.59
+2024-08-20 02:41:22,132 - INFO - For qnli, keeping sentences with token length between 29.00 and 74.00
+2024-08-20 02:41:23,975 - INFO - Filtered dataset size: 4383
+2024-08-20 02:41:24,319 - INFO - Generating statistics for qqp...
+2024-08-20 02:41:36,129 - INFO - Skewness for qqp: 1.86
+2024-08-20 02:41:36,132 - INFO - For qqp, keeping sentences with token length between 16.00 and 45.00
+2024-08-20 02:41:44,097 - INFO - Filtered dataset size: 33396
+2024-08-20 02:41:45,087 - INFO - Generating statistics for rte...
+2024-08-20 02:41:49,183 - INFO - Skewness for rte: 1.56
+2024-08-20 02:41:49,183 - INFO - For rte, keeping sentences with token length between 32.00 and 131.40
+2024-08-20 02:41:49,302 - INFO - Filtered dataset size: 222
+2024-08-20 02:41:49,562 - INFO - Generating statistics for sst2...
+2024-08-20 02:41:53,888 - INFO - Skewness for sst2: 0.41
+2024-08-20 02:41:53,888 - INFO - For sst2, keeping sentences with token length between 13.33 and 35.56
+2024-08-20 02:41:54,036 - INFO - Filtered dataset size: 556
+2024-08-20 02:41:54,302 - INFO - Generating statistics for wnli...
+2024-08-20 02:41:58,248 - INFO - Skewness for wnli: 1.75
+2024-08-20 02:41:58,248 - INFO - For wnli, keeping sentences with token length between 20.00 and 60.00
+2024-08-20 02:41:58,265 - INFO - Filtered dataset size: 59
+2024-08-20 02:41:58,524 - INFO - Generating statistics for mnli...
+2024-08-20 02:42:06,193 - INFO - Skewness for mnli: 1.79
+2024-08-20 02:42:06,194 - INFO - For mnli, keeping sentences with token length between 16.00 and 62.00
+2024-08-20 02:42:08,703 - INFO - Filtered dataset size: 7979

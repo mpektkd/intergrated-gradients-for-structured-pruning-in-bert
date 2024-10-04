@@ -1,0 +1,42 @@
+{
+    "cola": {
+        "filter_method": "Quantile",
+        "lower_bound": 5.0,
+        "upper_bound": 16.0
+    },
+    "sst2": {
+        "filter_method": "Standard Deviation",
+        "lower_bound": 12.795352657258928,
+        "upper_bound": 33.53262899411722
+    },
+    "qqp": {
+        "filter_method": "Quantile",
+        "lower_bound": 16.0,
+        "upper_bound": 44.0
+    },
+    "wnli": {
+        "filter_method": "Quantile",
+        "lower_bound": 20.0,
+        "upper_bound": 59.0
+    },
+    "mnli": {
+        "filter_method": "Quantile",
+        "lower_bound": 15.0,
+        "upper_bound": 60.0
+    },
+    "mrpc": {
+        "filter_method": "Standard Deviation",
+        "lower_bound": 37.62467649187523,
+        "upper_bound": 62.86061762577183
+    },
+    "qnli": {
+        "filter_method": "Quantile",
+        "lower_bound": 28.0,
+        "upper_bound": 72.0
+    },
+    "rte": {
+        "filter_method": "Quantile",
+        "lower_bound": 31.0,
+        "upper_bound": 131.0
+    }
+}
